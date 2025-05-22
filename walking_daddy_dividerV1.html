@@ -1,0 +1,215 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Walking Daddy Divider</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 600px; margin: auto; background: #f0f8ff; }
+    h1, h2 { text-align: center; }
+    nav { text-align: center; margin-bottom: 20px; }
+    nav button { margin: 5px; padding: 10px 15px; font-size: 16px; border: none; background: #007bff; color: white; border-radius: 8px; }
+    nav button:hover { background: #0056b3; }
+    label { display: block; margin-top: 10px; }
+    input[type="text"], select { width: 100%; padding: 8px; }
+    .summary-box { background: #d1ecf1; padding: 10px; border-radius: 8px; margin: 15px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #007bff; color: white; }
+    tr:nth-child(even) { background: #f9f9f9; }
+    .center { text-align: center; }
+    .radio-group { display: flex; justify-content: space-around; }
+  </style>
+</head>
+<body>
+
+<h1>Walking Daddy Divider</h1>
+
+<nav>
+  <button onclick="showAddPlayer()">➕ Add Player</button>
+  <button onclick="showPlayerList()">🧍 Player List</button>
+  <button onclick="showDivider()">⚽ Team Divider</button>
+</nav>
+
+<div class="summary-box" id="summary">Loading...</div>
+<div id="content"></div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSy...", // Replace with your API key
+    authDomain: "walkingdaddy-e3058.firebaseapp.com",
+    databaseURL: "https://walkingdaddy-e3058-default-rtdb.firebaseio.com",
+    projectId: "walkingdaddy-e3058",
+    storageBucket: "walkingdaddy-e3058.appspot.com",
+    messagingSenderId: "xxxx",
+    appId: "1:xxxx:web:xxxx"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  let players = [];
+
+  function loadPlayers(callback) {
+    db.ref("players").once("value", snapshot => {
+      players = [];
+      snapshot.forEach(child => {
+        players.push({ id: child.key, ...child.val() });
+      });
+      if (callback) callback();
+    });
+  }
+
+  function savePlayer(player) {
+    return db.ref("players").push(player);
+  }
+
+  function updatePlayer(id, data) {
+    return db.ref("players/" + id).update(data);
+  }
+
+  function deletePlayer(id) {
+    return db.ref("players/" + id).remove();
+  }
+
+  function updateSummary() {
+    const total = players.length;
+    const pos = { GK: 0, DF: 0, MF: 0, FW: 0 };
+    players.forEach(p => pos[p.position]++);
+    document.getElementById("summary").innerHTML = `Total: <b>${total}</b> |
+      GK: <b>${pos.GK}</b> |
+      DF: <b>${pos.DF}</b> |
+      MF: <b>${pos.MF}</b> |
+      FW: <b>${pos.FW}</b>`;
+  }
+
+  function showAddPlayer(editIndex = null) {
+    let player = editIndex !== null ? players[editIndex] : { name: "", position: "GK", level: 1 };
+    const html = `
+      <h2>${editIndex !== null ? "✏️ Edit Player" : "➕ Add Player"}</h2>
+      <label>Name:</label>
+      <input type="text" id="name" value="${player.name}" required />
+      <label>Position:</label>
+      <div class="radio-group">
+        ${["GK", "DF", "MF", "FW"].map(pos => `
+          <label><input type="radio" name="position" value="${pos}" ${player.position === pos ? "checked" : ""}> ${pos}</label>
+        `).join("")}
+      </div>
+      <label>Level:</label>
+      <select id="level">
+        <option value="1" ${player.level == 1 ? "selected" : ""}>1 - Beginner</option>
+        <option value="2" ${player.level == 2 ? "selected" : ""}>2 - Starter</option>
+        <option value="3" ${player.level == 3 ? "selected" : ""}>3 - Good</option>
+        <option value="4" ${player.level == 4 ? "selected" : ""}>4 - Outstanding</option>
+      </select>
+      <br><br>
+      <button onclick="${editIndex !== null ? `submitEdit('${player.id}')` : 'submitNewPlayer()'}">✅ Submit</button>
+    `;
+    document.getElementById("content").innerHTML = html;
+  }
+
+  function submitNewPlayer() {
+    const name = document.getElementById("name").value.trim();
+    const position = document.querySelector('input[name="position"]:checked').value;
+    const level = parseInt(document.getElementById("level").value);
+
+    if (!name) return alert("Name required.");
+    if (players.find(p => p.name.toLowerCase() === name.toLowerCase())) return alert("Duplicate name!");
+
+    savePlayer({ name, position, level }).then(() => {
+      loadPlayers(() => { showPlayerList(); });
+    });
+  }
+
+  function submitEdit(id) {
+    const name = document.getElementById("name").value.trim();
+    const position = document.querySelector('input[name="position"]:checked').value;
+    const level = parseInt(document.getElementById("level").value);
+
+    if (!name) return alert("Name required.");
+
+    updatePlayer(id, { name, position, level }).then(() => {
+      loadPlayers(() => { showPlayerList(); });
+    });
+  }
+
+  function showPlayerList() {
+    loadPlayers(() => {
+      updateSummary();
+      players.sort((a, b) => a.position.localeCompare(b.position));
+      let html = `<h2>🧍 Player List</h2>
+        <table><tr><th>Name</th><th>Position</th><th>Level</th><th>Action</th></tr>`;
+      players.forEach((p, i) => {
+        html += `<tr>
+          <td>${p.name}</td>
+          <td>${p.position}</td>
+          <td>${p.level}</td>
+          <td>
+            <button onclick="showAddPlayer(${i})">✏️</button>
+            <button onclick="removePlayer('${p.id}')">🗑️</button>
+          </td>
+        </tr>`;
+      });
+      html += `</table>`;
+      document.getElementById("content").innerHTML = html;
+    });
+  }
+
+  function removePlayer(id) {
+    if (confirm("Delete this player?")) {
+      deletePlayer(id).then(() => {
+        loadPlayers(() => showPlayerList());
+      });
+    }
+  }
+
+  function showDivider() {
+    loadPlayers(() => {
+      updateSummary();
+      let html = `<h2>⚽ Team Divider</h2><form id="teamForm">`;
+      players.forEach((p, i) => {
+        html += `<label><input type="checkbox" name="sel" value="${p.id}"> ${p.name} (${p.position})</label><br>`;
+      });
+      html += `<br><label>Players per team: <input type="number" id="teamSize" value="7" min="2" max="15" /></label><br><br>
+        <button onclick="divideTeams(event)">Divide</button></form>
+        <div id="result"></div>`;
+      document.getElementById("content").innerHTML = html;
+    });
+  }
+
+  function divideTeams(e) {
+    e.preventDefault();
+    const teamSize = parseInt(document.getElementById("teamSize").value);
+    const selected = Array.from(document.querySelectorAll('input[name="sel"]:checked')).map(cb => cb.value);
+    if (selected.length < teamSize) return alert("Not enough players.");
+
+    const selectedPlayers = players.filter(p => selected.includes(p.id));
+    selectedPlayers.sort((a, b) => b.level - a.level);
+    const teams = [];
+    const numTeams = Math.floor(selectedPlayers.length / teamSize);
+    for (let i = 0; i < numTeams; i++) teams.push([]);
+
+    for (let i = 0; i < selectedPlayers.length; i++) {
+      teams[i % numTeams].push(selectedPlayers[i]);
+    }
+
+    let html = `<h3>Divided Teams:</h3>`;
+    teams.forEach((team, i) => {
+      html += `<h4>Team ${i + 1}</h4><ul>`;
+      team.forEach(p => {
+        html += `<li>${p.name} (${p.position}) - L${p.level}</li>`;
+      });
+      html += `</ul>`;
+    });
+
+    document.getElementById("result").innerHTML = html;
+  }
+
+  loadPlayers(updateSummary);
+</script>
+
+</body>
+</html>
